@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>//DMA Store</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #f9f9f9;
+    margin: 0; padding: 0;
+  }
+  header, footer {
+    background: #0078d7; color: white; text-align: center; padding: 1rem;
+  }
+  main {
+    max-width: 900px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+  }
+  .products {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(280px,1fr));
+    gap: 1rem;
+  }
+  .product-card {
+    background: white; padding: 1rem; border-radius: 8px;
+    box-shadow: 0 1px 6px rgb(0 0 0 / 0.1);
+  }
+  .product-name {
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+  }
+  .price {
+    color: #0078d7;
+    margin-bottom: 0.5rem;
+  }
+  .stock {
+    color: #555;
+    margin-bottom: 1rem;
+  }
+  /* Cart styles */
+  #cart {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: 320px;
+    background: #000;
+    color: white;
+    padding: 1rem;
+    box-shadow: -4px 0 8px rgba(0,0,0,0.3);
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+  }
+  #cart.visible {
+    transform: translateX(0);
+  }
+  #cart h2 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+  }
+  #cart-items {
+    flex-grow: 1;
+    overflow-y: auto;
+    margin-bottom: 1rem;
+  }
+  .cart-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    align-items: center;
+  }
+  .cart-item-name {
+    flex: 1 1 auto;
+  }
+  .cart-item-qty {
+    width: 40px;
+    margin: 0 0.5rem;
+  }
+  .cart-item-remove {
+    background: transparent;
+    border: none;
+    color: #f44336;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 1.2rem;
+  }
+  #cart-total {
+    font-weight: bold;
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+  }
+  #cart-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  button {
+    cursor: pointer;
+  }
+  .buy-button {
+    background: #0078d7;
+    border: none;
+    padding: 0.6rem 1rem;
+    color: white;
+    border-radius: 8px;
+    font-weight: bold;
+  }
+  .buy-button:hover {
+    background: #005fa3;
+  }
+  #payment-options {
+    margin-top: 1rem;
+  }
+  #payment-options button {
+    width: 100%;
+    padding: 0.6rem 1rem;
+    margin-top: 0.3rem;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+  }
+  #paypal-btn {
+    background: #003087;
+    color: white;
+  }
+  #paypal-btn:hover {
+    background: #001f5b;
+  }
+  #close-cart {
+    align-self: flex-end;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    font-weight: bold;
+    cursor: pointer;
+    margin-bottom: 1rem;
+  }
+  /* Fixed bottom-right buttons container */
+  #fixed-buttons {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    z-index: 1100;
+  }
+  #cart-toggle, #admin-panel-btn {
+    background: #0078d7;
+    border: none;
+    color: white;
+    padding: 0.6rem 1rem;
+    border-radius: 20px;
+    font-weight: bold;
+    width: 120px;
+  }
+  #cart-toggle:hover, #admin-panel-btn:hover {
+    background: #005fa3;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Welcome to //DMA</h1>
+  <p>Your reliable source for awesome digital products</p>
+</header>
+
+<main>
+  <section class="products" id="products-container">
+    Loading products...
+  </section>
+</main>
+
+<!-- Cart Sidebar -->
+<aside id="cart" aria-label="Shopping cart">
+  <button id="close-cart" aria-label="Close cart">&times;</button>
+  <h2>Your Cart</h2>
+  <div id="cart-items">Your cart is empty.</div>
+  <div id="cart-total">Total: £0.00</div>
+  <div id="cart-buttons">
+    <button id="buy-btn" class="buy-button">Buy</button>
+  </div>
+  <div id="payment-options" style="display:none;">
+    <button id="paypal-btn">Pay with PayPal</button>
+  </div>
+</aside>
+
+<footer>
+  &copy; 2025 //DMA
+</footer>
+
+<!-- Fixed bottom-right buttons -->
+<div id="fixed-buttons">
+  <button id="admin-panel-btn" title="Admin Panel">Admin Panel</button>
+  <button id="cart-toggle" aria-label="Toggle cart">Cart</button>
+</div>
+
+<script>
+  const API_URL = 'http://localhost:5000/api/products';
+
+  let products = [];
+  let cartItems = [];
+
+  const productsContainer = document.getElementById('products-container');
+  const cart = document.getElementById('cart');
+  const cartToggle = document.getElementById('cart-toggle');
+  const closeCartBtn = document.getElementById('close-cart');
+  const cartItemsDiv = document.getElementById('cart-items');
+  const cartTotalDiv = document.getElementById('cart-total');
+  const buyBtn = document.getElementById('buy-btn');
+  const paymentOptions = document.getElementById('payment-options');
+  const paypalBtn = document.getElementById('paypal-btn');
+  const adminPanelBtn = document.getElementById('admin-panel-btn');
+
+  // Load products from API
+  async function loadProducts() {
+    productsContainer.innerHTML = 'Loading products...';
+    try {
+      const res = await fetch(API_URL);
+      products = await res.json();
+
+      if (products.length === 0) {
+        productsContainer.innerHTML = '<p>No products found.</p>';
+        return;
+      }
+
+      productsContainer.innerHTML = '';
+
+      products.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'product-card';
+
+        card.innerHTML = `
+          <div class="product-name">${p.name}</div>
+          <div class="price">£${p.price.toFixed(2)}</div>
+          <div class="stock">${p.stock > 0 ? p.stock + ' in stock' : '<span style="color:red;">Out of stock</span>'}</div>
+          <div class="description">${p.description || ''}</div>
+          <button class="add-to-cart" data-id="${p._id}" ${p.stock <= 0 ? 'disabled' : ''}>Add to Cart</button>
+        `;
+
+        productsContainer.appendChild(card);
+      });
+
+      // Add event listeners for add to cart buttons
+      document.querySelectorAll('.add-to-cart').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.id;
+          addToCart(id);
+        });
+      });
+    } catch (err) {
+      productsContainer.innerHTML = '<p>Error loading products.</p>';
+      console.error(err);
+    }
+  }
+
+  function addToCart(productId) {
+    const product = products.find(p => p._id === productId);
+    if (!product) return;
+
+    const cartItem = cartItems.find(item => item._id === productId);
+
+    if (cartItem) {
+      if (cartItem.quantity < product.stock) {
+        cartItem.quantity++;
+      } else {
+        alert('No more stock available for this product.');
+      }
+    } else {
+      cartItems.push({ ...product, quantity: 1 });
+    }
+    renderCart();
+  }
+
+  function removeFromCart(productId) {
+    cartItems = cartItems.filter(item => item._id !== productId);
+    renderCart();
+  }
+
+  function updateQuantity(productId, quantity) {
+    const cartItem = cartItems.find(item => item._id === productId);
+    if (!cartItem) return;
+
+    if (quantity < 1) {
+      removeFromCart(productId);
+      return;
+    }
+
+    if (quantity > cartItem.stock) {
+      alert('Not enough stock available.');
+      return;
+    }
+
+    cartItem.quantity = quantity;
+    renderCart();
+  }
+
+  function renderCart() {
+    if (cartItems.length === 0) {
+      cartItemsDiv.innerHTML = 'Your cart is empty.';
+      cartTotalDiv.textContent = 'Total: £0.00';
+      paymentOptions.style.display = 'none';
+      return;
+    }
+
+    cartItemsDiv.innerHTML = '';
+    cartItems.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'cart-item';
+      div.innerHTML = `
+        <div class="cart-item-name">${item.name}</div>
+        <input type="number" min="1" max="${item.stock}" value="${item.quantity}" class="cart-item-qty" aria-label="Quantity for ${item.name}" />
+        <button class="cart-item-remove" aria-label="Remove ${item.name} from cart">&times;</button>
+      `;
+      // Quantity change handler
+      const qtyInput = div.querySelector('.cart-item-qty');
+      qtyInput.addEventListener('change', (e) => {
+        let val = parseInt(e.target.value);
+        if (isNaN(val) || val < 1) val = 1;
+        if (val > item.stock) val = item.stock;
+        e.target.value = val;
+        updateQuantity(item._id, val);
+      });
+      // Remove button handler
+      const removeBtn = div.querySelector('.cart-item-remove');
+      removeBtn.addEventListener('click', () => removeFromCart(item._id));
+      cartItemsDiv.appendChild(div);
+    });
+
+    const total = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    cartTotalDiv.textContent = `Total: £${total.toFixed(2)}`;
+    paymentOptions.style.display = 'none';
+  }
+
+  cartToggle.addEventListener('click', () => {
+    cart.classList.toggle('visible');
+  });
+
+  closeCartBtn.addEventListener('click', () => {
+    cart.classList.remove('visible');
+  });
+
+  buyBtn.addEventListener('click', () => {
+    if (cartItems.length === 0) {
+      alert('Your cart is empty!');
+      return;
+    }
+    paymentOptions.style.display = 'block';
+  });
+
+  paypalBtn.addEventListener('click', () => {
+    if (cartItems.length === 0) {
+      alert('Your cart is empty!');
+      return;
+    }
+    const total = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const amount = total.toFixed(2);
+    const paypalLink = `https://paypal.me/legitslowrise/${amount}`;
+    window.open(paypalLink, '_blank');
+  });
+
+  adminPanelBtn.addEventListener('click', () => {
+    const code = prompt('Enter admin access code:');
+    // Change this to your desired admin code:
+    const ADMIN_CODE = 'your_admin_code_here';
+    if (code === ADMIN_CODE) {
+      window.location.href = 'admin.html';
+    } else {
+      alert('Access denied.');
+    }
+  });
+
+  loadProducts();
+  renderCart();
+</script>
+
+</body>
+</html>
